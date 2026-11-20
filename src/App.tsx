@@ -37,6 +37,9 @@ import { CartitasView } from './components/CartitasView';
 import { PlanesView } from './components/PlanesView';
 import { NosotrosView } from './components/NosotrosView';
 import { SafeImage } from './components/SafeImage';
+import { doc, onSnapshot, setDoc } from 'firebase/firestore';
+import { db, auth } from './firebase';
+import { onAuthStateChanged, type User } from 'firebase/auth';
 
 const STORAGE_KEY = 'entre-nosotros-state-v1';
 
@@ -92,6 +95,8 @@ const TAB_ITEMS: { id: TabId; label: string }[] = [
 
 export default function App() {
   const [state, setState] = useState<PersistedState>(loadInitialState);
+  const [cloudReady, setCloudReady] = useState(false);
+  const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>('inicio');
   const [showWelcome, setShowWelcome] = useState(false);
   const [pinPreviewOpen, setPinPreviewOpen] = useState(false);
@@ -100,6 +105,13 @@ export default function App() {
   const [isCreateMemoryOpen, setIsCreateMemoryOpen] = useState(false);
   const [selectedMemoryId, setSelectedMemoryId] = useState<string | null>(null);
 
+  useEffect(() => {
+  const unsubscribe = onAuthStateChanged(auth, (user) => {
+    setFirebaseUser(user);
+  });
+
+  return () => unsubscribe();
+}, []);
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
