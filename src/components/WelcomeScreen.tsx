@@ -14,6 +14,16 @@ import {
 import { CoupleProfile } from '../types';
 import { IMAGES } from '../data/initialData';
 import { SafeImage } from './SafeImage';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
+import { auth } from '../firebase';
+import {
+  doc,
+  setDoc,
+  serverTimestamp,
+  collection,
+  runTransaction
+} from 'firebase/firestore';
+import { db } from '../firebase';
 
 interface WelcomeScreenProps {
   couple: CoupleProfile;
@@ -41,15 +51,31 @@ const [password, setPassword] = useState('');
   e.preventDefault();
 
   try {
-    await createUserWithEmailAndPassword(auth, email.trim(), password);
+    const credential = await createUserWithEmailAndPassword(
+      auth,
+      email.trim(),
+      password
+    );
+
+    const coupleRef = doc(collection(db, 'couples'));
+
+    await setDoc(coupleRef, {
+      partner1: name1.trim(),
+      partner2: name2.trim(),
+      startDate: startDate,
+      coupleCode: coupleRef.id,
+      memberUids: [credential.user.uid],
+      createdAt: serverTimestamp(),
+    });
 
     onEnterApp({
       partner1: name1.trim(),
       partner2: name2.trim(),
       startDate: startDate,
+      coupleCode: coupleRef.id,
     });
 
-    onNotify('¡Tu cuenta se creó correctamente!');
+    onNotify('¡Tu cuenta y espacio se crearon correctamente!');
   } catch (error: any) {
     if (error.code === 'auth/email-already-in-use') {
       onNotify('Este correo ya tiene una cuenta.');
@@ -58,21 +84,83 @@ const [password, setPassword] = useState('');
     } else if (error.code === 'auth/weak-password') {
       onNotify('La contraseña debe tener al menos 6 caracteres.');
     } else {
-      onNotify('No se pudo crear la cuenta. Inténtalo nuevamente.');
+      onNotify('No se pudo crear el espacio. Inténtalo nuevamente.');
     }
   }
 };
 
-const handleJoinSubmit = (e: React.FormEvent) => {
+const handleJoinSubmit = async (e: React.FormEvent) => {
   e.preventDefault();
 
-  if (!joinCode.trim()) {
-    onNotify('Introduce tu código de pareja');
-    return;
-  }
+  try {
+    let credential;
 
-  onEnterApp({ coupleCode: joinCode.trim().toUpperCase() });
-  onNotify(`Conectado al espacio ${joinCode.trim().toUpperCase()}`);
+    try {
+      credential = await createUserWithEmailAndPassword(
+        auth,
+        email.trim(),
+        password
+      );
+    } catch (error: any) {
+      if (error.code === 'auth/email-already-in-use') {
+        credential = await signInWithEmailAndPassword(
+          auth,
+          email.trim(),
+          password
+        );
+      } else {
+        throw error;
+      }
+    }
+
+    const code = joinCode.trim();
+    const coupleRef = doc(db, 'couples', code);
+
+    const coupleData = await runTransaction(db, async (transaction) => {
+      const coupleSnap = await transaction.get(coupleRef);
+
+      if (!coupleSnap.exists()) {
+        throw new Error('INVALID_CODE');
+      }
+
+      const data = coupleSnap.data();
+      const members = data.memberUids || [];
+      const uid = credential.user.uid;
+
+      if (members.includes(uid)) {
+        throw new Error('ALREADY_MEMBER');
+      }
+
+      if (members.length >= 2) {
+        throw new Error('SPACE_FULL');
+      }
+
+      transaction.update(coupleRef, {
+        memberUids: [...members, uid]
+      });
+
+      return data;
+    });
+
+    onEnterApp({
+      partner1: coupleData.partner1,
+      partner2: coupleData.partner2,
+      startDate: coupleData.startDate,
+      coupleCode: code,
+    });
+
+    onNotify('¡Ya están conectados!');
+  } catch (error: any) {
+    if (error.message === 'INVALID_CODE') {
+      onNotify('No encontramos ese código de pareja.');
+    } else if (error.message === 'ALREADY_MEMBER') {
+      onNotify('Esta cuenta ya pertenece al espacio.');
+    } else if (error.message === 'SPACE_FULL') {
+      onNotify('Este espacio ya tiene dos integrantes.');
+    } else {
+      onNotify('No se pudo vincular la cuenta. Inténtalo nuevamente.');
+    }
+  }
 };
 
   
@@ -382,26 +470,55 @@ const handleJoinSubmit = (e: React.FormEvent) => {
                 <X className="w-4 h-4" />
               </button>
             </div>
+<form onSubmit={handleJoinSubmit} className="space-y-4 mt-4">
+  <div>
+    <label className="block text-xs font-semibold text-on-surface-variant mb-1">
+      Código secreto de pareja
+    </label>
+    <input
+      type="text"
+      required
+      value={joinCode}
+      onChange={(e) => setJoinCode(e.target.value)}
+      placeholder="Código de pareja"
+      className="w-full bg-surface-container-low rounded-xl px-4 py-3 text-lg"
+    />
+  </div>
 
-            <form onSubmit={handleJoinSubmit} className="space-y-4 mt-4">
-              <div>
-                <label className="block text-xs font-semibold text-on-surface-variant mb-1">
-                  Código secreto de pareja
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={joinCode}
-                  onChange={(e) => setJoinCode(e.target.value)}
-                  placeholder="Ej. AMOR-8492"
-                  className="w-full bg-surface-container-low rounded-xl px-4 py-3 text-lg font-editorial tracking-widest text-primary focus:outline-none focus:ring-2 focus:ring-primary-container"
-                />
-              </div>
+  <div>
+    <label className="block text-xs font-semibold text-on-surface-variant mb-1">
+      Tu correo electrónico
+    </label>
+    <input
+      type="email"
+      required
+      value={email}
+      onChange={(e) => setEmail(e.target.value)}
+      placeholder="tucorreo@ejemplo.com"
+      className="w-full bg-surface-container-low rounded-xl px-3.5 py-2.5 text-sm"
+    />
+  </div>
 
-              <button
-                type="submit"
-                className="w-full py-3.5 rounded-full bg-primary text-on-primary font-semibold text-sm shadow-sm active:scale-[0.98] transition-transform cursor-pointer"
-              >
+  <div>
+    <label className="block text-xs font-semibold text-on-surface-variant mb-1">
+      Tu contraseña
+    </label>
+    <input
+      type="password"
+      required
+      value={password}
+      onChange={(e) => setPassword(e.target.value)}
+      placeholder="Tu contraseña"
+      className="w-full bg-surface-container-low rounded-xl px-3.5 py-2.5 text-sm"
+    />
+  </div>
+
+  <button
+    type="submit"
+    className="w-full py-3.5 rounded-full bg-primary text-on-primary font-semibold text-sm shadow-sm active:scale-[0.98] transition-transform cursor-pointer"
+  >
+
+          
                 Abrir nuestro espacio
               </button>
             </form>
