@@ -127,17 +127,15 @@ const handleJoinSubmit = async (e: React.FormEvent) => {
       const members = data.memberUids || [];
       const uid = credential.user.uid;
 
-      if (members.includes(uid)) {
-        throw new Error('ALREADY_MEMBER');
-      }
+    if (!members.includes(uid)) {
+  if (members.length >= 2) {
+    throw new Error('SPACE_FULL');
+  }
 
-      if (members.length >= 2) {
-        throw new Error('SPACE_FULL');
-      }
-
-      transaction.update(coupleRef, {
-        memberUids: [...members, uid]
-      });
+  transaction.update(coupleRef, {
+    memberUids: [...members, uid]
+  });
+}
 
       return data;
     });
