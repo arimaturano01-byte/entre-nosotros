@@ -1,0 +1,6 @@
+{
+  "name": "Entre Nosotros",
+  "description": "Diario íntimo, álbum de recuerdos, cartitas y planes compartidos para parejas.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
