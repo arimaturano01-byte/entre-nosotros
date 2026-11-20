@@ -98,7 +98,7 @@ export default function App() {
   const [cloudReady, setCloudReady] = useState(false);
   const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>('inicio');
-  const [showWelcome, setShowWelcome] = useState(false);
+  const [showWelcome, setShowWelcome] = useState(true);
   const [pinPreviewOpen, setPinPreviewOpen] = useState(false);
   const [pinDigits, setPinDigits] = useState('');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
