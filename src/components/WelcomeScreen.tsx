@@ -34,26 +34,48 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
   const [name2, setName2] = useState(couple.partner2);
   const [startDate, setStartDate] = useState(couple.startDate);
   const [joinCode, setJoinCode] = useState(couple.coupleCode);
+  const [email, setEmail] = useState('');
+const [password, setPassword] = useState('');
 
-  const handleCreateSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleCreateSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+
+  try {
+    await createUserWithEmailAndPassword(auth, email.trim(), password);
+
     onEnterApp({
-      partner1: name1.trim() || 'Sofía',
-      partner2: name2.trim() || 'Mateo',
-      startDate: startDate || '2022-02-14',
+      partner1: name1.trim(),
+      partner2: name2.trim(),
+      startDate: startDate,
     });
-    onNotify('¡Vuestro rincón compartido está listo!');
-  };
 
-  const handleJoinSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!joinCode.trim()) {
-      onNotify('Introduce tu código de pareja');
-      return;
+    onNotify('¡Tu cuenta se creó correctamente!');
+  } catch (error: any) {
+    if (error.code === 'auth/email-already-in-use') {
+      onNotify('Este correo ya tiene una cuenta.');
+    } else if (error.code === 'auth/invalid-email') {
+      onNotify('El correo electrónico no es válido.');
+    } else if (error.code === 'auth/weak-password') {
+      onNotify('La contraseña debe tener al menos 6 caracteres.');
+    } else {
+      onNotify('No se pudo crear la cuenta. Inténtalo nuevamente.');
     }
-    onEnterApp({ coupleCode: joinCode.trim().toUpperCase() });
-    onNotify(`Conectado al espacio ${joinCode.trim().toUpperCase()}`);
-  };
+  }
+};
+
+const handleJoinSubmit = (e: React.FormEvent) => {
+  e.preventDefault();
+
+  if (!joinCode.trim()) {
+    onNotify('Introduce tu código de pareja');
+    return;
+  }
+
+  onEnterApp({ coupleCode: joinCode.trim().toUpperCase() });
+  onNotify(`Conectado al espacio ${joinCode.trim().toUpperCase()}`);
+};
+
+  
 
   return (
     <div className="min-h-screen bg-surface text-on-surface flex flex-col items-center justify-center px-5 py-8 relative overflow-hidden">
@@ -279,6 +301,34 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
                   />
                 </div>
               </div>
+              <div>
+  <label className="block text-xs font-semibold text-on-surface-variant mb-1">
+    Tu correo electrónico
+  </label>
+  <input
+    type="email"
+    required
+    value={email}
+    onChange={(e) => setEmail(e.target.value)}
+    className="w-full bg-surface-container-low rounded-xl px-3.5 py-2.5 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary-container"
+    placeholder="tucorreo@ejemplo.com"
+  />
+</div>
+
+<div>
+  <label className="block text-xs font-semibold text-on-surface-variant mb-1">
+    Crea una contraseña
+  </label>
+  <input
+    type="password"
+    required
+    minLength={6}
+    value={password}
+    onChange={(e) => setPassword(e.target.value)}
+    className="w-full bg-surface-container-low rounded-xl px-3.5 py-2.5 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary-container"
+    placeholder="Mínimo 6 caracteres"
+  />
+</div>
 
               <div>
                 <label className="block text-xs font-semibold text-on-surface-variant mb-1">
