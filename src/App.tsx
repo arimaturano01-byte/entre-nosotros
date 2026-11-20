@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   Bell,
   Camera,
@@ -37,7 +37,7 @@ import { CartitasView } from './components/CartitasView';
 import { PlanesView } from './components/PlanesView';
 import { NosotrosView } from './components/NosotrosView';
 import { SafeImage } from './components/SafeImage';
-import { doc, onSnapshot, setDoc } from 'firebase/firestore';
+import { doc, onSnapshot, setDoc, runTransaction } from 'firebase/firestore';
 import { db, auth } from './firebase';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 
@@ -96,6 +96,7 @@ const TAB_ITEMS: { id: TabId; label: string }[] = [
 export default function App() {
   const [state, setState] = useState<PersistedState>(loadInitialState);
   const [cloudReady, setCloudReady] = useState(false);
+  const lastCloudStateRef = useRef<string | null>(null);
   const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>('inicio');
   const [showWelcome, setShowWelcome] = useState(true);
@@ -105,13 +106,82 @@ export default function App() {
   const [isCreateMemoryOpen, setIsCreateMemoryOpen] = useState(false);
   const [selectedMemoryId, setSelectedMemoryId] = useState<string | null>(null);
 
-  useEffect(() => {
+useEffect(() => {
   const unsubscribe = onAuthStateChanged(auth, (user) => {
     setFirebaseUser(user);
   });
 
   return () => unsubscribe();
 }, []);
+
+useEffect(() => {
+  if (!firebaseUser || !state.couple.coupleCode) {
+    setCloudReady(false);
+    return;
+  }
+
+  const sharedRef = doc(
+    db,
+    'couples',
+    state.couple.coupleCode,
+    'shared',
+    'state'
+  );
+
+  const unsubscribe = onSnapshot(
+    sharedRef,
+    async (snapshot) => {
+      if (snapshot.exists()) {
+        const cloudState = snapshot.data() as PersistedState;
+        lastCloudStateRef.current = JSON.stringify(cloudState);
+        setState(cloudState);
+        setCloudReady(true);
+      } else {
+        try {
+          await runTransaction(db, async (transaction) => {
+            const current = await transaction.get(sharedRef);
+
+            if (!current.exists()) {
+              transaction.set(sharedRef, state);
+            }
+          });
+        } catch (error) {
+          setCloudReady(false);
+          console.error('Error al inicializar datos:', error);
+        }
+      }
+    },
+    (error) => {
+      setCloudReady(false);
+      console.error('Error al leer Firestore:', error);
+    }
+  );
+
+  return () => unsubscribe();
+}, [firebaseUser, state.couple.coupleCode]);
+
+useEffect(() => {
+  if (!firebaseUser || !cloudReady || !state.couple.coupleCode) return;
+
+  const serializedState = JSON.stringify(state);
+
+  if (serializedState === lastCloudStateRef.current) return;
+
+  lastCloudStateRef.current = serializedState;
+
+  const sharedRef = doc(
+    db,
+    'couples',
+    state.couple.coupleCode,
+    'shared',
+    'state'
+  );
+
+  setDoc(sharedRef, state).catch((error) => {
+    lastCloudStateRef.current = null;
+    console.error('Error al guardar datos en Firestore:', error);
+  });
+}, [firebaseUser, cloudReady, state]);
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
