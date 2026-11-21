@@ -157,7 +157,7 @@ const handleJoinSubmit = async (e: React.FormEvent) => {
       onNotify('Este espacio ya tiene dos integrantes.');
     } else {
       console.error('Error al vincular:', error);
-onNotify(`Error: ${error.code || error.message}`);
+       onNotify(`Error: ${error.code || error.message}`);
     }
   }
 };
