@@ -156,7 +156,8 @@ const handleJoinSubmit = async (e: React.FormEvent) => {
     } else if (error.message === 'SPACE_FULL') {
       onNotify('Este espacio ya tiene dos integrantes.');
     } else {
-      onNotify('No se pudo vincular la cuenta. Inténtalo nuevamente.');
+      console.error('Error al vincular:', error);
+onNotify(`Error: ${error.code || error.message}`);
     }
   }
 };
